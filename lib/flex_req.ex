@@ -62,8 +62,8 @@ defmodule FlexReq do
   defp prepare_url("//" <> rest),       do: "http://"  <> rest
   defp prepare_url(url),                do: "http://"  <> url
 
-  defp parse_userinfo(nil), do: {nil, nil}
-  defp parse_userinfo(info) when info |> is_binary do
+  def parse_userinfo(nil), do: {nil, nil}
+  def parse_userinfo(info) when info |> is_binary do
     case String.split(info, ":") do
       [user, pass] -> {user, pass}
       _ -> raise "Invalid Url Userinfo"
@@ -92,13 +92,13 @@ defmodule FlexReq do
       <> render_fragment(req)
   end
 
-  defp render_scheme(%{scheme: nil}),        do: "http"
-  defp render_scheme(%{scheme: ""<>scheme}), do: scheme
+  def render_scheme(%{scheme: nil}),        do: "http"
+  def render_scheme(%{scheme: ""<>scheme}), do: scheme
 
-  defp render_userpass(%{user: ""<>user, pass: ""<>pass}) do
+  def render_userpass(%{user: ""<>user, pass: ""<>pass}) do
     user <> ":" <> pass
   end
-  defp render_userpass(_) do
+  def render_userpass(_) do
     ""
   end
 
@@ -109,58 +109,63 @@ defmodule FlexReq do
     raise "Invalid Host - #{inspect req}"
   end
 
-  defp render_port(%{scheme: "http", port: nil}),   do: ""
-  defp render_port(%{scheme: "http", port: 80}),    do: ""
-  defp render_port(%{scheme: "https", port: nil}),  do: ""
-  defp render_port(%{scheme: "https", port: 443}),  do: ""
-  defp render_port(%{port: nil}),                   do: ""
-  defp render_port(%{port: port}) do
+  def render_port(%{scheme: "http", port: nil}),   do: ""
+  def render_port(%{scheme: "http", port: 80}),    do: ""
+  def render_port(%{scheme: "https", port: nil}),  do: ""
+  def render_port(%{scheme: "https", port: 443}),  do: ""
+  def render_port(%{port: nil}),                   do: ""
+  def render_port(%{port: port}) do
     ":" <> (port |> Kernel.to_string)
   end
 
-  defp render_path(%{path: path}) when path |> is_list do
-    path |> Path.join |> render_path
-  end
-  defp render_path(%{path: path}) do
-    path |> render_path
-  end
-  defp render_path(nil) do
+  def render_path(%{path: []}) do
     ""
   end
-  defp render_path("/" <> "") do
-    "/"
+  def render_path(%{path: path}) when path |> is_list do
+    path |> Path.join |> render_path
   end
-  defp render_path("/" <> path) do
+  def render_path(%{path: path}) do
     path |> render_path
   end
-  defp render_path(path) when path |> is_binary do
+  def render_path(nil) do
+    ""
+  end
+  def render_path("/" <> "") do
+    "/"
+  end
+  def render_path("/" <> path) do
+    path |> render_path
+  end
+  def render_path(path) when path |> is_binary do
     "/" <> path
   end
 
-  defp render_query(%FlexReq{query: query}) do
+  def render_query(%FlexReq{query: query}) do
     render_query(query)
   end
-  defp render_query(nil) do
+  def render_query(nil) do
     ""
   end
-  defp render_query(q) when q |> is_list do
+  def render_query(q) when q |> is_list do
     q |> Enum.into(%{}) |> render_query
   end
-  defp render_query(q) when q |> is_map do
+  def render_query(q) when q |> is_map do
     "?" <> URI.encode_query(q)
   end
-  defp render_query(q) when q |> is_binary do
+  def render_query(q) when q |> is_binary do
     "?" <> URI.encode(q)
   end
 
-  defp render_fragment(%{fragment: frag}) do
+
+  def render_fragment(%{fragment: frag}) do
     frag |> render_fragment
   end
-  defp render_fragment(nil), do: ""
-  defp render_fragment(frag) when frag |> is_list do
+  def render_fragment(nil), do: ""
+  def render_fragment([]), do: ""
+  def render_fragment(frag) when frag |> is_list do
     frag |> Path.join |> render_fragment
   end
-  defp render_fragment(frag) when frag |> is_binary do
+  def render_fragment(frag) when frag |> is_binary do
     "#" <> frag
   end
 
