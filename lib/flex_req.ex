@@ -1,14 +1,14 @@
 defmodule FlexReq do
   defstruct [
     method:     :get,
-    scheme:     nil,
+    scheme:     "http",
     user:       nil,
     pass:       nil,
     host:       nil,
-    port:       nil,
-    path:       nil,
-    query:      nil,
-    fragment:   nil,
+    port:       80,
+    path:       [],
+    query:      %{},
+    fragment:   [],
     body:       nil,
     headers:    [],
     options:    [],
@@ -32,6 +32,9 @@ defmodule FlexReq do
       user:       user,
       pass:       pass,
     }
+    |> path_to_list
+    |> query_to_map
+    |> fragment_to_list
   end
   def new(parts) when parts |> is_list do
     parts
@@ -147,7 +150,11 @@ defmodule FlexReq do
     ""
   end
   defp render_query(q) when q |> is_map do
-    "?" <> URI.encode_query(q)
+    if Map.equal?(q, %{}) do
+      ""
+    else
+      "?" <> URI.encode_query(q)
+    end
   end
   defp render_query(q) when q |> is_binary do
     "?" <> URI.encode(q)
@@ -229,15 +236,16 @@ defmodule FlexReq do
     req
   end
 
-  def path_to_list(%FlexReq{path: nil} = req) do
-    %{ req | path: [] }
+  defp path_to_list(%FlexReq{path: p} = req) do
+    %{ req | path:  do_path_to_list(p) }
   end
-  def path_to_list(%FlexReq{path: p} = req) when p |> is_binary do
-    %{ req | path: p |> Path.split }
+  defp fragment_to_list(%FlexReq{fragment: f} = req) do
+    %{ req | fragment:  do_path_to_list(f) }
   end
-  def path_to_list(%FlexReq{path: p} = req) when p |> is_list do
-    req
-  end
+
+  def do_path_to_list(p) when p |> is_nil,    do: []
+  def do_path_to_list(p) when p |> is_binary, do: p |> Path.split
+  def do_path_to_list(p) when p |> is_list,   do: p
 
   def add_query(%FlexReq{} = req, key, value) do
     qmap =
@@ -265,5 +273,6 @@ defmodule FlexReq do
       |> Map.get(:path)
     %{ req | path: path ++ other }
   end
+
 
 end
