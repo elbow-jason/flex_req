@@ -14,6 +14,10 @@ defmodule FlexReq do
     options:    [],
   ]
 
+  def parse_url(url) when url |> is_binary do
+    new(url)
+  end
+
   def new(url) when url |> is_binary do
     url
     |> prepare_url
@@ -81,10 +85,10 @@ defmodule FlexReq do
   end
 
   defp do_send(req) do
-    HTTPoison.request(req.method, url(req), req.body, req.headers, req.options)
+    HTTPoison.request(req.method, req |> FlexReq.to_string, req.body, req.headers, req.options)
   end
 
-  def url(req) do
+  def to_string(req) do
     render_scheme(req)
       <> "://"
       <> render_userpass(req)
@@ -274,5 +278,11 @@ defmodule FlexReq do
     %{ req | path: path ++ other }
   end
 
+end
 
+
+defimpl String.Chars, for: FlexReq do
+  def to_string(%FlexReq{} = req) do
+    FlexReq.to_string(req)
+  end
 end
