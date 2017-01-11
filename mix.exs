@@ -29,7 +29,7 @@ defmodule FlexReq.Mixfile do
   defp deps do
     [
       {:httpoison, "~> 0.9.2"},
-      {:poison, "~> 3.0"},
+      {:poison, "~> 2.2.0"},
     ]
   end
 end
