@@ -18,8 +18,6 @@ defmodule FlexReq.Parse do
     end
   end
 
-
-
   def userinfo(nil), do: {nil, nil}
   def userinfo(info) when info |> is_binary do
     case String.split(info, ":") do
