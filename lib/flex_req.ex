@@ -86,7 +86,6 @@ defmodule FlexReq do
     end
   end
 
-
   def add_headers(%FlexReq{} = req, []) do
     req
   end

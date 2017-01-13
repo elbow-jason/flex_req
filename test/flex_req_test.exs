@@ -101,5 +101,10 @@ defmodule FlexReqTest do
     ]
   end
 
+  test "a request can be sent" do
+    x = "www.google.com"
+      |> FlexReq.new
+      |> FlexReq.send
+  end
 
 end
