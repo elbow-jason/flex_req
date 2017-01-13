@@ -1,4 +1,8 @@
 defmodule FlexReq do
+  alias FlexReq.{Parse, Render}
+
+  @handler Application.get_env(:flex_req, :request_handler) || FlexReq.DefaultRequestHandler
+
   defstruct [
     method:     :get,
     scheme:     "http",
@@ -14,39 +18,26 @@ defmodule FlexReq do
     options:    [],
   ]
 
-  def parse_url(url) when url |> is_binary do
-    new(url)
-  end
+  def handler, do: @handler
 
-  def new(url) when url |> is_binary do
-    url
-    |> prepare_url
-    |> URI.parse
-    |> new
+  def new do
+    %FlexReq{}
   end
-  def new(%URI{} = uri) do
-    {user, pass} = parse_userinfo(uri.userinfo)
-    %FlexReq{
-      host:       uri.host,
-      port:       uri.port,
-      scheme:     uri.scheme,
-      path:       uri.path,
-      query:      uri.query,
-      fragment:   uri.fragment,
-      user:       user,
-      pass:       pass,
-    }
-    |> path_to_list
-    |> query_to_map
-    |> fragment_to_list
+  def new(url) when url |> is_binary do
+    Parse.url(url)
   end
   def new(parts) when parts |> is_list do
     parts
     |> Enum.into(%{})
     |> new
   end
-  def new(parts) when parts |> is_map do
-    struct_set =
+
+  def parse(url) when url |> is_binary do
+    Parse.url(url)
+  end
+
+  def from_map(parts = %{}) do
+    key_set =
       %FlexReq{}
       |> Map.from_struct
       |> Map.keys
@@ -57,204 +48,63 @@ defmodule FlexReq do
       |> MapSet.new
     drop_fields =
       parts_set
-      |> MapSet.difference(struct_set)
+      |> MapSet.difference(key_set)
       |> MapSet.to_list
     parts
     |> Map.drop(drop_fields)
     |> Enum.reduce(%FlexReq{}, fn ({field, val}, req) -> Map.put(req, field, val) end)
   end
 
-  defp prepare_url("http://" <> rest),  do: "http://"  <> rest
-  defp prepare_url("https://" <> rest), do: "https://" <> rest
-  defp prepare_url("//" <> rest),       do: "http://"  <> rest
-  defp prepare_url(url),                do: "http://"  <> url
+  def from_uri(%URI{} = uri) do
+    {user, pass} = Parse.userinfo(uri.userinfo)
+    %FlexReq{
+      host:       uri.host,
+      port:       uri.port,
+      scheme:     uri.scheme,
+      path:       uri.path,
+      query:      uri.query,
+      fragment:   uri.fragment,
+      user:       user,
+      pass:       pass,
+    }
+    |> Parse.path
+    |> Parse.query
+    |> Parse.fragment
+  end
 
-  defp parse_userinfo(nil), do: {nil, nil}
-  defp parse_userinfo(info) when info |> is_binary do
-    case String.split(info, ":") do
-      [user, pass] -> {user, pass}
-      _ -> raise "Invalid Url Userinfo"
-    end
+  def to_string(%FlexReq{} = req) do
+    Render.url(req)
   end
 
   def send(%FlexReq{} = req) do
-    # prep for httpoison
+    FlexReq.send(@handler, req)
+  end
+  def send(handler_module, req) do
     req
-    |> prepare_req
-    |> do_send
-  end
-
-  defp do_send(req) do
-    HTTPoison.request(req.method, req |> FlexReq.to_string, req.body, req.headers, req.options)
-  end
-
-  def to_string(req) do
-    render_scheme(req)
-      <> "://"
-      <> render_userpass(req)
-      <> render_host(req)
-      <> render_port(req)
-      <> render_path(req)
-      <> render_query(req)
-      <> render_fragment(req)
-  end
-
-  defp render_scheme(%{scheme: nil}),        do: "http"
-  defp render_scheme(%{scheme: ""<>scheme}), do: scheme
-
-  defp render_userpass(%{user: ""<>user, pass: ""<>pass}) do
-    user <> ":" <> pass
-  end
-  defp render_userpass(_) do
-    ""
-  end
-
-  defp render_host(%{host: host}) when host |> is_binary do
-    host
-  end
-  defp render_host(req) do
-    raise "Invalid Host - #{inspect req}"
-  end
-
-  defp render_port(%{scheme: "http", port: nil}),   do: ""
-  defp render_port(%{scheme: "http", port: 80}),    do: ""
-  defp render_port(%{scheme: "https", port: nil}),  do: ""
-  defp render_port(%{scheme: "https", port: 443}),  do: ""
-  defp render_port(%{port: nil}),                   do: ""
-  defp render_port(%{port: port}) do
-    ":" <> (port |> Kernel.to_string)
-  end
-
-  defp render_path(%{path: []}) do
-    ""
-  end
-  defp render_path(%{path: path}) when path |> is_list do
-    path |> Path.join |> render_path
-  end
-  defp render_path(%{path: path}) do
-    path |> render_path
-  end
-  defp render_path(nil) do
-    ""
-  end
-  defp render_path("/" <> "") do
-    "/"
-  end
-  defp render_path("/" <> path) do
-    path |> render_path
-  end
-  defp render_path(path) when path |> is_binary do
-    "/" <> path
-  end
-
-  defp render_query(%FlexReq{query: query}) do
-    render_query(query)
-  end
-  defp render_query(nil) do
-    ""
-  end
-  defp render_query(q) when q |> is_map do
-    if Map.equal?(q, %{}) do
-      ""
-    else
-      "?" <> URI.encode_query(q)
-    end
-  end
-  defp render_query(q) when q |> is_binary do
-    "?" <> URI.encode(q)
+    |> handler_module.prepare_request
+    |> handler.send_request
   end
 
 
-  defp render_fragment(%{fragment: frag}) do
-    frag |> render_fragment
-  end
-  defp render_fragment(nil), do: ""
-  defp render_fragment([]), do: ""
-  defp render_fragment(frag) when frag |> is_list do
-    frag |> Path.join |> render_fragment
-  end
-  defp render_fragment(frag) when frag |> is_binary do
-    "#" <> frag
-  end
-
-  defp prepare_req(req) do
-    req
-    |> render_body
-    |> prepare_headers
-    |> prepare_method
-  end
-
-  defp render_body(%FlexReq{body: body} = req) when body |> is_list or body |> is_map do
-    case Poison.encode(body) do
-      {:ok, rendered} ->
-        req
-        |> json_headers
-        |> Map.put(:body, rendered)
-      _ ->
-        raise "Failed to JSON Encode Body: #{inspect body}"
-    end
-  end
-  defp render_body(%FlexReq{body: body} = req) do
-    %{ req | body: body |> Kernel.to_string }
-  end
-
-  defp json_headers do
-    [{"Content-Type", "application/json"}]
-  end
-  defp json_headers(%FlexReq{headers: headers} = req) do
-    %{ req | headers: json_headers() ++ headers }
-  end
-
-  defp prepare_headers(%FlexReq{headers: headers} = req) do
-    %{ req | headers: headers |> Enum.uniq }
-  end
-
-  @atom_methods ~w(
-    get post put patch delete options head
-  )a
-
-  @string_methods ~w(
-    get post put patch delete options head
-    GET POST PUT PATCH DELETE OPTIONS HEAD
-  )
-
-  defp prepare_method(%{method: method} = req) do
-    %{ req | method: prepare_method(method) }
-  end
-  defp prepare_method(method) when method in @atom_methods do
-    method
-  end
-  defp prepare_method(method) when method in @string_methods do
-    method
-    |> String.downcase
-    |> String.to_existing_atom
-  end
-
-  def query_to_map(%FlexReq{query: nil} = req) do
-    %{ req | query: %{} }
-  end
-  def query_to_map(%FlexReq{query: q} = req) when q |> is_binary do
-    %{ req | query: URI.decode_query(q) }
-  end
-  def query_to_map(%FlexReq{query: %{} = _a_map} = req) do
+  def add_headers(%FlexReq{} = req, []) do
     req
   end
-
-  defp path_to_list(%FlexReq{path: p} = req) do
-    %{ req | path:  do_path_to_list(p) }
+  def add_headers(%FlexReq{} = req, [ header | rest ]) do
+    req
+    |> add_headers(header)
+    |> add_headers(rest)
   end
-  defp fragment_to_list(%FlexReq{fragment: f} = req) do
-    %{ req | fragment:  do_path_to_list(f) }
+  def add_headers(%FlexReq{} = req, {key, val}) do
+    %{ req | headers: [ {key, val} | req.headers ] }
   end
-
-  def do_path_to_list(p) when p |> is_nil,    do: []
-  def do_path_to_list(p) when p |> is_binary, do: p |> Path.split
-  def do_path_to_list(p) when p |> is_list,   do: p
+  def add_headers(%FlexReq{} = req, key, value) when key |> is_binary and value |> is_binary do
+    add_headers(req, {key, value})
+  end
 
   def add_query(%FlexReq{} = req, key, value) do
     qmap =
       req
-      |> query_to_map
+      |> Parse.query
       |> Map.get(:query)
     %{ req | query: Map.put(qmap, key, value) }
   end
@@ -262,7 +112,7 @@ defmodule FlexReq do
   def merge_query(%FlexReq{} = req, other) do
     qmap =
       req
-      |> query_to_map
+      |> Parse.query
       |> Map.get(:query)
     %{ req | query: Map.merge(qmap, other) }
   end
@@ -273,13 +123,12 @@ defmodule FlexReq do
   def append_path(%FlexReq{} = req, other) when other |> is_list do
     path =
       req
-      |> path_to_list
+      |> Parse.path
       |> Map.get(:path)
     %{ req | path: path ++ other }
   end
 
 end
-
 
 defimpl String.Chars, for: FlexReq do
   def to_string(%FlexReq{} = req) do
