@@ -8,10 +8,17 @@ defmodule FlexReq.Parse do
     |> FlexReq.from_uri
   end
 
-  defp prepare_url("http://" <> rest),  do: "http://"  <> rest
-  defp prepare_url("https://" <> rest), do: "https://" <> rest
-  defp prepare_url("//" <> rest),       do: "http://"  <> rest
-  defp prepare_url(url),                do: "http://"  <> url
+  defp prepare_url("//" <> rest) do
+    "http://" <> rest
+  end
+  defp prepare_url(url) when url |> is_binary do
+    case String.split(url, "://") do
+      [^url] -> "http://" <> url
+      [_, _] -> url
+    end
+  end
+
+
 
   def userinfo(nil), do: {nil, nil}
   def userinfo(info) when info |> is_binary do
