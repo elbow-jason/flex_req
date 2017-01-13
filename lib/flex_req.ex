@@ -80,9 +80,10 @@ defmodule FlexReq do
     FlexReq.send(@handler, req)
   end
   def send(handler_module, req) do
-    req
-    |> handler_module.prepare_request
-    |> handler.send_request
+    case handler_module.prepare_request(req) do
+      {:ok, prepped} -> handler.send_request(prepped)
+      err -> err
+    end
   end
 
 
